@@ -6,6 +6,10 @@
     // - Adjusted GenerateArena() to include BuildNavMesh() function after geometry is created
     // - Added BuildNavMesh() method
     // - Replaced TeleportActor() method with updated version that makes the AI spawn cleanly onto the baked NavMesh after generation
+// v0.2.1
+    // - Replaced TeleportActor() with updated version 
+    // - Confirmed order of GenerateArena() methods
+    // - Confirm BuildNavMesh() happens before PositionActors()
 using System.Collections.Generic;
 using BulletTimeDodgeball.Gameplay;
 using Unity.AI.Navigation;
@@ -384,17 +388,17 @@ namespace BulletTimeDodgeball.Arena
         {
             Vector3 playerPos = GetGroundedSpawnPosition(playerSpawnCell);
             Vector3 aiPos = GetGroundedSpawnPosition(aiSpawnCell);
-
+        
             if (playerTransform != null)
             {
                 TeleportActor(playerTransform, playerPos);
             }
-
+        
             if (aiTransform != null)
             {
                 TeleportActor(aiTransform, aiPos);
             }
-
+        
             if (playerTransform != null && aiTransform != null)
             {
                 FaceActorToward(playerTransform, aiTransform.position);
@@ -420,11 +424,27 @@ namespace BulletTimeDodgeball.Arena
             NavMeshAgent navAgent = actorTransform.GetComponent<NavMeshAgent>();
             if (navAgent != null)
             {
-                if (navAgent.enabled)
+                Vector3 finalPosition = worldPosition;
+        
+                if (NavMesh.SamplePosition(worldPosition, out NavMeshHit hit, 2.0f, NavMesh.AllAreas))
                 {
-                    navAgent.Warp(worldPosition);
-                    return;
+                    finalPosition = hit.position;
                 }
+                else
+                {
+                    Debug.LogWarning($"ArenaGenerator: Could not find NavMesh near spawn point {worldPosition} for {actorTransform.name}");
+                }
+        
+                actorTransform.position = finalPosition;
+        
+                if (!navAgent.enabled)
+                {
+                    navAgent.enabled = true;
+                }
+        
+                navAgent.Warp(finalPosition);
+                navAgent.ResetPath();
+                return;
             }
         
             CharacterController controller = actorTransform.GetComponent<CharacterController>();
