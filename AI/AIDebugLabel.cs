@@ -1,11 +1,12 @@
 // v0.2
-  // Initial script release
-  // Changes:
-  // - Added simple screen-space debug label for AI state display
-  // - Toggleable on/off
-  // - Shows AI state, dodge state, move target state, and ball possession
+// Changes:
+// - Added simple screen-space debug label for AI state display
+// - Toggleable on/off
+// - Shows AI state, dodge state, move target state, and ball possession
+// - Updated toggle input to use Unity Input System
 
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 namespace BulletTimeDodgeball.Gameplay
 {
@@ -19,7 +20,7 @@ namespace BulletTimeDodgeball.Gameplay
         [Header("Display")]
         [SerializeField] private bool showLabel = true;
         [SerializeField] private Vector3 worldOffset = new Vector3(0f, 2.2f, 0f);
-        [SerializeField] private KeyCode toggleKey = KeyCode.F4;
+        [SerializeField] private Key toggleKey = Key.F4;
 
         private GUIStyle labelStyle;
 
@@ -43,7 +44,7 @@ namespace BulletTimeDodgeball.Gameplay
 
         private void Update()
         {
-            if (Input.GetKeyDown(toggleKey))
+            if (Keyboard.current != null && Keyboard.current[toggleKey].wasPressedThisFrame)
             {
                 showLabel = !showLabel;
             }
