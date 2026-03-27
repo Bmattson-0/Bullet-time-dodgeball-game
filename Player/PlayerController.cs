@@ -4,6 +4,9 @@
     // Changes:
     // - Adding Player Dodge Mechanic via TickDodgeTimers() HandleDodgeInput() and updates to Update() and HandleMovement()
     // - For is.Dodging renamed framevelocity to dodgeframevelocity to prevent error
+// v0.3
+    // Changes:
+    // - Add movement particles "speedlines" as VFX
 using BulletTimeDodgeball.Gameplay;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -54,6 +57,11 @@ namespace BulletTimeDodgeball.Player
         [SerializeField] private float throwChargeTime = 1f;
         [SerializeField] private LayerMask pickupMask = ~0;
 
+        [Header("VFX")]
+        [SerializeField] private ParticleSystem speedLines;
+        [SerializeField] private float sprintEmissionRate = 20f;
+        [SerializeField] private float dodgeEmissionRate = 80f;
+        
         [Header("God Mode")]
         [SerializeField] private Key godModeToggleKey = Key.F3;
         [SerializeField] private float godModeFlySpeed = 10f;
@@ -211,7 +219,8 @@ namespace BulletTimeDodgeball.Player
             }
 
             bool isSprinting = Keyboard.current != null && Keyboard.current.leftShiftKey.isPressed && hasMoveInput;
-
+            UpdateSpeedLines(isSprinting, isDodging);
+            
             if (isSprinting && resources != null)
             {
                 bool canSpendSprint = resources.SpendStamina(sprintStaminaDrainPerSecond * Time.unscaledDeltaTime);
@@ -338,6 +347,26 @@ namespace BulletTimeDodgeball.Player
             // Cancel charged throw if dodging mid-charge
             isChargingThrow = false;
             throwCharge01 = 0f;
+        }
+
+        private void UpdateSpeedLines(bool isSprinting, bool isDodging)
+        {
+            if (speedLines == null) return;
+        
+            var emission = speedLines.emission;
+        
+            if (isDodging)
+            {
+                emission.rateOverTime = dodgeEmissionRate;
+            }
+            else if (isSprinting)
+            {
+                emission.rateOverTime = sprintEmissionRate;
+            }
+            else
+            {
+                emission.rateOverTime = 0f;
+            }
         }
         
         private void HandleGodModeMovement(Vector3 moveInput, bool hasMoveInput)
