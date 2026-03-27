@@ -1,0 +1,10 @@
+v0.1
+- Core movement system
+- Ball pickup/throw
+- Arena generation
+- Basic AI
+
+v0.2 (planned)
+- NavMesh AI movement
+- Improved pathing
+- Removed stuck logic fallback
