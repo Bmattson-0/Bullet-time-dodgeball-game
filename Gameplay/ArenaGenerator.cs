@@ -1,7 +1,15 @@
 // v0.1
-// Initial prototype version
+    // Initial prototype version
+// v0.2
+    // - Added navmesh using statements
+    // - Added Navigation fields
+    // - Adjusted GenerateArena() to include BuildNavMesh() function after geometry is created
+    // - Added BuildNavMesh() method
+    // - Replaced TeleportActor() method with updated version that makes the AI spawn cleanly onto the baked NavMesh after generation
 using System.Collections.Generic;
 using BulletTimeDodgeball.Gameplay;
+using Unity.AI.Navigation;
+using UnityEngine.AI;
 using UnityEngine;
 
 namespace BulletTimeDodgeball.Arena
@@ -49,6 +57,9 @@ namespace BulletTimeDodgeball.Arena
         [Header("Debug")]
         [SerializeField] private bool drawCellGizmos = false;
 
+        [Header("Navigation")]
+        [SerializeField] private NavMeshSurface navMeshSurface;
+
         private Transform generatedRoot;
         private readonly List<Vector2Int> freeCells = new();
 
@@ -77,6 +88,7 @@ namespace BulletTimeDodgeball.Arena
             BuildOuterWalls();
             BuildKillboxBounds();
             BuildObstacleLayout();
+            BuildNavMesh();
             PositionActors();
             SpawnBalls();
         }
@@ -310,6 +322,22 @@ namespace BulletTimeDodgeball.Arena
             }
         }
 
+        private void BuildNavMesh()
+        {
+            if (navMeshSurface == null)
+            {
+                navMeshSurface = GetComponent<NavMeshSurface>();
+            }
+        
+            if (navMeshSurface == null)
+            {
+                Debug.LogWarning("ArenaGenerator: No NavMeshSurface assigned/found on ArenaRoot.");
+                return;
+            }
+        
+            navMeshSurface.BuildNavMesh();
+        }
+
         private bool IsSpawnCell(Vector2Int cell)
         {
             return cell == playerSpawnCell || cell == aiSpawnCell;
@@ -389,8 +417,17 @@ namespace BulletTimeDodgeball.Arena
 
         private void TeleportActor(Transform actorTransform, Vector3 worldPosition)
         {
+            NavMeshAgent navAgent = actorTransform.GetComponent<NavMeshAgent>();
+            if (navAgent != null)
+            {
+                if (navAgent.enabled)
+                {
+                    navAgent.Warp(worldPosition);
+                    return;
+                }
+            }
+        
             CharacterController controller = actorTransform.GetComponent<CharacterController>();
-
             if (controller != null)
             {
                 bool wasEnabled = controller.enabled;
