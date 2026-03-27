@@ -1,3 +1,5 @@
+// v0.1
+// Initial prototype version
 using UnityEngine;
 
 namespace BulletTimeDodgeball.Player
