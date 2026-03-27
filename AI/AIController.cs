@@ -1,12 +1,13 @@
 // v0.1
-// Initial prototype version
-// v0.2
-// Changes:
-// - Replaced CharacterController movement with NavMeshAgent movement
-// - Added reachable-ball search using NavMesh path checks
-// - Added NavMesh-based repositioning
-// - Preserved predictive throw logic
-// - Kept light dodge behavior during reposition
+    // Initial prototype version
+// v0.2.1
+    // Changes:
+    // - Replaced CharacterController movement with NavMeshAgent movement
+    // - Added reachable-ball search using NavMesh path checks
+    // - Added NavMesh-based repositioning
+    // - Preserved predictive throw logic
+    // - Kept light dodge behavior during reposition
+    // - Removed ApplyFacing() method from Update()
 
 using UnityEngine;
 using UnityEngine.AI;
@@ -185,7 +186,6 @@ namespace BulletTimeDodgeball.Gameplay
                     break;
             }
 
-            ApplyFacing();
             ApplyDodgeMovement();
         }
 
