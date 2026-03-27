@@ -1,0 +1,1 @@
+Assets\Scripts\Player\PlayerController.cs(199,25): error CS0136: A local or parameter named 'frameVelocity' cannot be declared in this scope because that name is used in an enclosing local scope to define a local or parameter
