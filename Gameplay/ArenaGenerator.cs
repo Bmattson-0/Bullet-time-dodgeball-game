@@ -10,6 +10,8 @@
     // - Replaced TeleportActor() with updated version 
     // - Confirmed order of GenerateArena() methods
     // - Confirm BuildNavMesh() happens before PositionActors()
+// v0.2.2
+    // - Added obstacle rotation inside the BuildObstacleLayout() method
 using System.Collections.Generic;
 using BulletTimeDodgeball.Gameplay;
 using Unity.AI.Navigation;
@@ -318,8 +320,9 @@ namespace BulletTimeDodgeball.Arena
                     }
 
                     Vector3 worldPos = CellToWorld(cell);
-                    Quaternion rotation = Quaternion.Euler(0f, 90f * Random.Range(0, 4), 0f);
-
+                    float rotationY = 45f * Random.Range(0, 8);
+                    Quaternion rotation = Quaternion.Euler(0f, rotationY, 0f);
+                    
                     GameObject instance = Instantiate(selectedPrefab, worldPos, rotation, generatedRoot);
                     instance.name = $"{selectedPrefab.name}_{x}_{z}";
                 }
