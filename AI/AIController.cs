@@ -1,6 +1,6 @@
 // v0.1
     // Initial prototype version
-// v0.2.2
+// v0.2.3
     // Changes:
     // - Replaced CharacterController movement with NavMeshAgent movement
     // - Added reachable-ball search using NavMesh path checks
@@ -8,7 +8,8 @@
     // - Preserved predictive throw logic
     // - Kept light dodge behavior during reposition
     // - Removed ApplyFacing() method from Update()
-    // - adjusted player reference in Start()
+    // - Adjusted player reference in Start()
+    // - Fixed agent Awake() state
 
 using UnityEngine;
 using UnityEngine.AI;
@@ -96,6 +97,8 @@ namespace BulletTimeDodgeball.Gameplay
         {
             agent = GetComponent<NavMeshAgent>();
             actor = GetComponent<RoundActor>();
+
+            agent.enabled = false;
 
             if (holdPoint == null)
             {
