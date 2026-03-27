@@ -12,6 +12,8 @@
     // - Confirm BuildNavMesh() happens before PositionActors()
 // v0.2.2
     // - Added obstacle rotation inside the BuildObstacleLayout() method
+// v0.2.3
+    // - Splitting the group of obstacle pre-fabs into 45 degree rotation enabled and 90 degree rotation only.
 using System.Collections.Generic;
 using BulletTimeDodgeball.Gameplay;
 using Unity.AI.Navigation;
@@ -28,6 +30,7 @@ namespace BulletTimeDodgeball.Arena
         {
             public GameObject prefab;
             [Min(1)] public int weight = 1;
+            public bool allow45DegreeRotation = false;
         }
 
         [Header("Arena Size")]
@@ -313,18 +316,22 @@ namespace BulletTimeDodgeball.Arena
                         continue;
                     }
 
-                    GameObject selectedPrefab = GetRandomObstaclePrefab();
-                    if (selectedPrefab == null)
+                    WeightedPrefab selectedEntry = GetRandomObstacleEntry();
+                    if (selectedEntry == null || selectedEntry.prefab == null)
                     {
                         continue;
                     }
-
+                    
                     Vector3 worldPos = CellToWorld(cell);
-                    float rotationY = 45f * Random.Range(0, 8);
+                    
+                    float rotationY = selectedEntry.allow45DegreeRotation
+                        ? 45f * Random.Range(0, 8)
+                        : 90f * Random.Range(0, 4);
+                    
                     Quaternion rotation = Quaternion.Euler(0f, rotationY, 0f);
                     
-                    GameObject instance = Instantiate(selectedPrefab, worldPos, rotation, generatedRoot);
-                    instance.name = $"{selectedPrefab.name}_{x}_{z}";
+                    GameObject instance = Instantiate(selectedEntry.prefab, worldPos, rotation, generatedRoot);
+                    instance.name = $"{selectedEntry.prefab.name}_{x}_{z}";
                 }
             }
         }
@@ -350,10 +357,10 @@ namespace BulletTimeDodgeball.Arena
             return cell == playerSpawnCell || cell == aiSpawnCell;
         }
 
-        private GameObject GetRandomObstaclePrefab()
+        private WeightedPrefab GetRandomObstacleEntry()
         {
             int totalWeight = 0;
-
+        
             foreach (WeightedPrefab entry in obstaclePrefabs)
             {
                 if (entry != null && entry.prefab != null && entry.weight > 0)
@@ -361,29 +368,29 @@ namespace BulletTimeDodgeball.Arena
                     totalWeight += entry.weight;
                 }
             }
-
+        
             if (totalWeight <= 0)
             {
                 return null;
             }
-
+        
             int roll = Random.Range(0, totalWeight);
-
+        
             foreach (WeightedPrefab entry in obstaclePrefabs)
             {
                 if (entry == null || entry.prefab == null || entry.weight <= 0)
                 {
                     continue;
                 }
-
+        
                 if (roll < entry.weight)
                 {
-                    return entry.prefab;
+                    return entry;
                 }
-
+        
                 roll -= entry.weight;
             }
-
+        
             return null;
         }
 
