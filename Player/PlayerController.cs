@@ -1,8 +1,9 @@
 // v0.1
     // Initial prototype version
-// v0.2
+// v0.2.1
     // Changes:
     // - Adding Player Dodge Mechanic via TickDodgeTimers() HandleDodgeInput() and updates to Update() and HandleMovement()
+    // - For is.Dodging renamed framevelocity to dodgeframevelocity to prevent error
 using BulletTimeDodgeball.Gameplay;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -196,8 +197,8 @@ namespace BulletTimeDodgeball.Player
             
                 verticalVelocity += gravity * Time.deltaTime;
                 Vector3 dodgeVelocity = dodgeDirection * finalDodgeSpeed;
-                Vector3 frameVelocity = dodgeVelocity + Vector3.up * verticalVelocity;
-                characterController.Move(frameVelocity * Time.deltaTime);
+                Vector3 dodgeFrameVelocity = dodgeVelocity + Vector3.up * verticalVelocity;
+                characterController.Move(dodgeFrameVelocity * Time.deltaTime);
             
                 planarVelocity = Vector3.zero;
                 return;
