@@ -1,11 +1,19 @@
 // v0.1
 // Initial prototype version
-using BulletTimeDodgeball.Player;
+// v0.2
+// Changes:
+// - Replaced CharacterController movement with NavMeshAgent movement
+// - Added reachable-ball search using NavMesh path checks
+// - Added NavMesh-based repositioning
+// - Preserved predictive throw logic
+// - Kept light dodge behavior during reposition
+
 using UnityEngine;
+using UnityEngine.AI;
 
 namespace BulletTimeDodgeball.Gameplay
 {
-    [RequireComponent(typeof(CharacterController))]
+    [RequireComponent(typeof(NavMeshAgent))]
     [RequireComponent(typeof(RoundActor))]
     public class AIController : MonoBehaviour
     {
@@ -22,20 +30,14 @@ namespace BulletTimeDodgeball.Gameplay
         [SerializeField] private Transform aimOrigin;
         [SerializeField] private RoundActor playerActor;
 
-        [Header("Movement")]
-        [SerializeField] private float moveSpeed = 6.5f;
-        [SerializeField] private float acceleration = 24f;
-        [SerializeField] private float rotationSpeed = 540f;
-        [SerializeField] private float gravity = -25f;
+        [Header("Navigation")]
         [SerializeField] private float stoppingDistance = 0.25f;
+        [SerializeField] private float ballSearchInterval = 0.35f;
+        [SerializeField] private float repathInterval = 0.35f;
+        [SerializeField] private float navSampleRadius = 2.0f;
 
         [Header("Ball Interaction")]
         [SerializeField] private float pickupRange = 2.2f;
-        [SerializeField] private float ballSearchInterval = 0.35f;
-        [SerializeField] private float stuckCheckInterval = 0.5f;
-        [SerializeField] private float stuckDistanceThreshold = 0.2f;
-        [SerializeField] private float maxStuckTime = 1.5f;
-        [SerializeField] private float ignoredBallDuration = 2.5f;
 
         [Header("Positioning")]
         [SerializeField] private float desiredThrowDistance = 11f;
@@ -52,58 +54,45 @@ namespace BulletTimeDodgeball.Gameplay
         [SerializeField] private float maxPredictionTime = 1.2f;
 
         [Header("Dodge")]
-        [SerializeField] private float dodgeSpeedMultiplier = 1.5f;
+        [SerializeField] private float dodgeSpeed = 5.5f;
         [SerializeField] private float dodgeCooldown = 2f;
-        [SerializeField] private float dodgeDuration = 0.4f;
+        [SerializeField] private float dodgeDuration = 0.35f;
         [SerializeField] private float dodgeTriggerDistance = 15f;
         [SerializeField] [Range(0f, 1f)] private float dodgeTriggerChancePerCheck = 0.02f;
 
         [Header("Debug")]
         [SerializeField] private bool drawDebug = true;
 
-        private CharacterController characterController;
+        private NavMeshAgent agent;
         private RoundActor actor;
 
         private AIState currentState = AIState.AcquireBall;
         private Dodgeball heldBall;
         private Dodgeball targetBall;
 
-        private Vector3 planarVelocity;
-        private float verticalVelocity;
-
         private float ballSearchTimer;
+        private float repathTimer;
         private float repositionRefreshTimer;
         private float aimTimer;
         private float throwCooldownTimer;
+        private float dodgeCooldownTimer;
+        private float dodgeTimer;
+
+        private bool isDodging;
+        private Vector3 dodgeDirection;
 
         private Vector3 currentMoveTarget;
         private bool hasMoveTarget;
 
         private Vector3 lastPlayerPosition;
         private Vector3 estimatedPlayerVelocity;
-
-        private Vector3 desiredFacingDirection;
-        private bool hasDesiredFacing;
-
         private float repositionSideSign = 1f;
-
-        private float dodgeCooldownTimer;
-        private float dodgeTimer;
-        private bool isDodging;
-        private Vector3 dodgeDirection;
-
-        private float stuckCheckTimer;
-        private float accumulatedStuckTime;
-        private Vector3 lastStuckCheckPosition;
-
-        private Dodgeball ignoredBall;
-        private float ignoredBallTimer;
 
         public bool IsHoldingBall => heldBall != null;
 
         private void Awake()
         {
-            characterController = GetComponent<CharacterController>();
+            agent = GetComponent<NavMeshAgent>();
             actor = GetComponent<RoundActor>();
 
             if (holdPoint == null)
@@ -129,7 +118,8 @@ namespace BulletTimeDodgeball.Gameplay
                 }
             }
 
-            lastStuckCheckPosition = transform.position;
+            agent.updateRotation = false;
+            agent.stoppingDistance = stoppingDistance;
         }
 
         private void Start()
@@ -142,17 +132,12 @@ namespace BulletTimeDodgeball.Gameplay
 
         private void Update()
         {
-            if (ignoredBallTimer > 0f)
-            {
-                ignoredBallTimer -= Time.deltaTime;
-                if (ignoredBallTimer <= 0f)
-                {
-                    ignoredBall = null;
-                }
-            }
-            
             if (actor.IsEliminated)
             {
+                if (agent.enabled)
+                {
+                    agent.isStopped = true;
+                }
                 return;
             }
 
@@ -172,6 +157,10 @@ namespace BulletTimeDodgeball.Gameplay
                 if (dodgeTimer <= 0f)
                 {
                     isDodging = false;
+                    if (agent.enabled)
+                    {
+                        agent.isStopped = false;
+                    }
                 }
             }
 
@@ -196,9 +185,8 @@ namespace BulletTimeDodgeball.Gameplay
                     break;
             }
 
-            ApplyMovement();
             ApplyFacing();
-            TickStuckDetection();
+            ApplyDodgeMovement();
         }
 
         private void UpdatePlayerVelocityEstimate()
@@ -224,6 +212,7 @@ namespace BulletTimeDodgeball.Gameplay
             }
 
             ballSearchTimer -= Time.deltaTime;
+            repathTimer -= Time.deltaTime;
 
             if (targetBall == null || targetBall.State != Dodgeball.BallState.Idle)
             {
@@ -233,26 +222,35 @@ namespace BulletTimeDodgeball.Gameplay
             if (ballSearchTimer <= 0f)
             {
                 ballSearchTimer = ballSearchInterval;
-                targetBall = FindNearestIdleBall();
+                targetBall = FindBestReachableIdleBall();
             }
 
             if (targetBall == null)
             {
-                StopPlanarMotion();
+                StopNavigation();
 
                 if (playerActor != null)
                 {
-                    SetFacingTarget(playerActor.transform.position);
+                    FaceToward(playerActor.transform.position);
                 }
 
                 return;
             }
 
-            Vector3 ballPosition = targetBall.transform.position;
-            SetMoveTarget(ballPosition);
+            Vector3 ballTarget = targetBall.transform.position;
+            SetMoveTarget(ballTarget);
 
-            float distanceToBall = Vector3.Distance(transform.position, ballPosition);
-            if (distanceToBall <= pickupRange)
+            if (repathTimer <= 0f)
+            {
+                repathTimer = repathInterval;
+                if (agent.enabled && agent.isOnNavMesh)
+                {
+                    agent.isStopped = false;
+                    agent.SetDestination(currentMoveTarget);
+                }
+            }
+
+            if (Vector3.Distance(transform.position, targetBall.transform.position) <= pickupRange)
             {
                 bool pickedUp = targetBall.TryPickup(holdPoint, actor);
                 if (pickedUp)
@@ -260,9 +258,14 @@ namespace BulletTimeDodgeball.Gameplay
                     heldBall = targetBall;
                     targetBall = null;
                     ClearMoveTarget();
-                    ResetStuckDetection();
+                    StopNavigation();
                     ChangeState(AIState.Reposition);
                 }
+            }
+
+            if (playerActor != null)
+            {
+                FaceToward(playerActor.transform.position);
             }
         }
 
@@ -276,13 +279,14 @@ namespace BulletTimeDodgeball.Gameplay
 
             if (playerActor == null)
             {
-                StopPlanarMotion();
+                StopNavigation();
                 return;
             }
 
             TryDodge();
 
             repositionRefreshTimer -= Time.deltaTime;
+            repathTimer -= Time.deltaTime;
 
             if (!hasMoveTarget || repositionRefreshTimer <= 0f)
             {
@@ -291,20 +295,29 @@ namespace BulletTimeDodgeball.Gameplay
                 hasMoveTarget = true;
             }
 
+            if (!isDodging && repathTimer <= 0f)
+            {
+                repathTimer = repathInterval;
+                if (agent.enabled && agent.isOnNavMesh)
+                {
+                    agent.isStopped = false;
+                    agent.SetDestination(currentMoveTarget);
+                }
+            }
+
             float distanceToPlayer = Vector3.Distance(transform.position, playerActor.transform.position);
             bool inThrowBand = Mathf.Abs(distanceToPlayer - desiredThrowDistance) <= throwDistanceTolerance;
             bool hasLineOfSight = HasLineOfSightToPlayer();
 
-            if (!isDodging && inThrowBand && hasLineOfSight)
+            if (!isDodging && inThrowBand && hasLineOfSight && HasArrived())
             {
                 ClearMoveTarget();
-                ResetStuckDetection();
+                StopNavigation();
                 ChangeState(AIState.Aim);
                 return;
             }
 
-            SetMoveTarget(currentMoveTarget);
-            SetFacingTarget(playerActor.transform.position);
+            FaceToward(playerActor.transform.position);
         }
 
         private void TickAim()
@@ -327,10 +340,10 @@ namespace BulletTimeDodgeball.Gameplay
                 return;
             }
 
-            StopPlanarMotion();
+            StopNavigation();
 
             Vector3 predictedTarget = GetPredictedPlayerPosition();
-            SetFacingTarget(predictedTarget);
+            FaceToward(predictedTarget);
 
             aimTimer += Time.deltaTime;
             if (aimTimer >= aimDuration)
@@ -353,10 +366,11 @@ namespace BulletTimeDodgeball.Gameplay
                 return;
             }
 
+            StopNavigation();
+            FaceToward(playerActor.transform.position);
+
             if (throwCooldownTimer > 0f)
             {
-                StopPlanarMotion();
-                SetFacingTarget(playerActor.transform.position);
                 return;
             }
 
@@ -378,136 +392,19 @@ namespace BulletTimeDodgeball.Gameplay
             ChangeState(AIState.AcquireBall);
         }
 
-        private void ApplyMovement()
-        {
-            if (isDodging)
-            {
-                Vector3 dodgeVelocity = dodgeDirection * moveSpeed * dodgeSpeedMultiplier;
-
-                if (characterController.isGrounded && verticalVelocity < 0f)
-                {
-                    verticalVelocity = -2f;
-                }
-
-                verticalVelocity += gravity * Time.deltaTime;
-                Vector3 dodgeFrameVelocity = dodgeVelocity + Vector3.up * verticalVelocity;
-                characterController.Move(dodgeFrameVelocity * Time.deltaTime);
-
-                if (!hasDesiredFacing && playerActor != null)
-                {
-                    SetFacingTarget(playerActor.transform.position);
-                }
-
-                planarVelocity = Vector3.zero;
-                return;
-            }
-
-            Vector3 targetPlanarVelocity = Vector3.zero;
-
-            if (hasMoveTarget)
-            {
-                Vector3 toTarget = currentMoveTarget - transform.position;
-                toTarget.y = 0f;
-
-                float distance = toTarget.magnitude;
-                if (distance > stoppingDistance)
-                {
-                    Vector3 moveDirection = toTarget.normalized;
-                    targetPlanarVelocity = moveDirection * moveSpeed;
-
-                    if (!hasDesiredFacing)
-                    {
-                        SetFacingTarget(transform.position + moveDirection);
-                    }
-                }
-            }
-
-            if (characterController.isGrounded && verticalVelocity < 0f)
-            {
-                verticalVelocity = -2f;
-            }
-
-            planarVelocity = Vector3.MoveTowards(planarVelocity, targetPlanarVelocity, acceleration * Time.deltaTime);
-            verticalVelocity += gravity * Time.deltaTime;
-
-            Vector3 normalFrameVelocity = planarVelocity + Vector3.up * verticalVelocity;
-            characterController.Move(normalFrameVelocity * Time.deltaTime);
-        }
-
-        private void TickStuckDetection()
-        {
-            bool shouldMonitor = currentState == AIState.AcquireBall || currentState == AIState.Reposition;
-
-            if (!shouldMonitor || !hasMoveTarget || isDodging)
-            {
-                ResetStuckDetection();
-                return;
-            }
-
-            stuckCheckTimer -= Time.deltaTime;
-            if (stuckCheckTimer > 0f)
-            {
-                return;
-            }
-
-            float movedDistance = Vector3.Distance(transform.position, lastStuckCheckPosition);
-
-            if (movedDistance < stuckDistanceThreshold)
-            {
-                accumulatedStuckTime += stuckCheckInterval;
-            }
-            else
-            {
-                accumulatedStuckTime = 0f;
-            }
-
-            lastStuckCheckPosition = transform.position;
-            stuckCheckTimer = stuckCheckInterval;
-
-            if (accumulatedStuckTime >= maxStuckTime)
-            {
-                HandleStuckState();
-            }
-        }
-
-        private void HandleStuckState()
-        {
-            accumulatedStuckTime = 0f;
-            stuckCheckTimer = stuckCheckInterval;
-            lastStuckCheckPosition = transform.position;
-
-            if (currentState == AIState.AcquireBall)
-            {
-                if (targetBall != null)
-                {
-                    ignoredBall = targetBall;
-                    ignoredBallTimer = ignoredBallDuration;
-                }
-
-                targetBall = null;
-                ClearMoveTarget();
-                ballSearchTimer = 0f;
-            }
-            else if (currentState == AIState.Reposition)
-            {
-                repositionSideSign *= -1f;
-                repositionRefreshTimer = 0f;
-                ClearMoveTarget();
-            }
-        }
-
-        private void ResetStuckDetection()
-        {
-            accumulatedStuckTime = 0f;
-            stuckCheckTimer = stuckCheckInterval;
-            lastStuckCheckPosition = transform.position;
-        }
-
-        private Dodgeball FindNearestIdleBall()
+        private Dodgeball FindBestReachableIdleBall()
         {
             Dodgeball[] balls = FindObjectsByType<Dodgeball>(FindObjectsSortMode.None);
             Dodgeball bestBall = null;
             float bestDistanceSqr = float.MaxValue;
+
+            Vector3 origin = transform.position;
+            if (agent.enabled && agent.isOnNavMesh)
+            {
+                origin = agent.nextPosition;
+            }
+
+            NavMeshPath path = new NavMeshPath();
 
             foreach (Dodgeball ball in balls)
             {
@@ -516,7 +413,15 @@ namespace BulletTimeDodgeball.Gameplay
                     continue;
                 }
 
-                if (ignoredBall != null && ball == ignoredBall)
+                Vector3 target = ball.transform.position;
+
+                if (!NavMesh.SamplePosition(target, out NavMeshHit hit, navSampleRadius, NavMesh.AllAreas))
+                {
+                    continue;
+                }
+
+                bool hasPath = NavMesh.CalculatePath(origin, hit.position, NavMesh.AllAreas, path);
+                if (!hasPath || path.status != NavMeshPathStatus.PathComplete)
                 {
                     continue;
                 }
@@ -557,11 +462,20 @@ namespace BulletTimeDodgeball.Gameplay
 
             Vector3 desiredBase = playerActor.transform.position + radialDirection * desiredThrowDistance;
             Vector3 strafeOffset = sideDirection * strafeOffsetDistance * repositionSideSign;
+            Vector3 rawTarget = desiredBase + strafeOffset;
 
-            Vector3 target = desiredBase + strafeOffset;
-            target.y = transform.position.y;
+            if (NavMesh.SamplePosition(rawTarget, out NavMeshHit hit, navSampleRadius, NavMesh.AllAreas))
+            {
+                return hit.position;
+            }
 
-            return target;
+            Vector3 fallback = playerActor.transform.position + radialDirection * desiredThrowDistance;
+            if (NavMesh.SamplePosition(fallback, out hit, navSampleRadius, NavMesh.AllAreas))
+            {
+                return hit.position;
+            }
+
+            return transform.position;
         }
 
         private Vector3 GetPredictedPlayerPosition()
@@ -635,41 +549,56 @@ namespace BulletTimeDodgeball.Gameplay
             dodgeTimer = dodgeDuration;
             dodgeCooldownTimer = dodgeCooldown;
 
-            ClearMoveTarget();
-            ResetStuckDetection();
+            if (agent.enabled)
+            {
+                agent.isStopped = true;
+            }
+        }
+
+        private void ApplyDodgeMovement()
+        {
+            if (!isDodging)
+            {
+                return;
+            }
+
+            Vector3 delta = dodgeDirection * dodgeSpeed * Time.deltaTime;
+
+            if (agent.enabled && agent.isOnNavMesh)
+            {
+                agent.Move(delta);
+            }
+            else
+            {
+                transform.position += delta;
+            }
+
+            if (playerActor != null)
+            {
+                FaceToward(playerActor.transform.position);
+            }
+        }
+
+        private void FaceToward(Vector3 worldPoint)
+        {
+            Vector3 direction = worldPoint - transform.position;
+            direction.y = 0f;
+
+            if (direction.sqrMagnitude <= 0.0001f)
+            {
+                return;
+            }
+
+            Quaternion targetRotation = Quaternion.LookRotation(direction.normalized, Vector3.up);
+            transform.rotation = Quaternion.RotateTowards(
+                transform.rotation,
+                targetRotation,
+                agent.angularSpeed * Time.deltaTime);
         }
 
         private Vector3 GetAimPosition()
         {
             return aimOrigin != null ? aimOrigin.position : transform.position + Vector3.up * 1.2f;
-        }
-
-        private void SetFacingTarget(Vector3 worldPoint)
-        {
-            Vector3 direction = worldPoint - transform.position;
-            direction.y = 0f;
-
-            if (direction.sqrMagnitude > 0.0001f)
-            {
-                desiredFacingDirection = direction.normalized;
-                hasDesiredFacing = true;
-            }
-        }
-
-        private void ApplyFacing()
-        {
-            if (!hasDesiredFacing)
-            {
-                return;
-            }
-
-            Quaternion targetRotation = Quaternion.LookRotation(desiredFacingDirection, Vector3.up);
-            transform.rotation = Quaternion.RotateTowards(
-                transform.rotation,
-                targetRotation,
-                rotationSpeed * Time.deltaTime);
-
-            hasDesiredFacing = false;
         }
 
         private void SetMoveTarget(Vector3 worldPoint)
@@ -684,15 +613,35 @@ namespace BulletTimeDodgeball.Gameplay
             currentMoveTarget = transform.position;
         }
 
-        private void StopPlanarMotion()
+        private void StopNavigation()
         {
-            planarVelocity = Vector3.zero;
+            if (agent.enabled)
+            {
+                agent.isStopped = true;
+                agent.ResetPath();
+            }
+        }
+
+        private bool HasArrived()
+        {
+            if (!agent.enabled || !agent.isOnNavMesh)
+            {
+                return true;
+            }
+
+            if (agent.pathPending)
+            {
+                return false;
+            }
+
+            return agent.remainingDistance <= Mathf.Max(agent.stoppingDistance, 0.15f);
         }
 
         private void ChangeState(AIState nextState)
         {
             currentState = nextState;
-            ResetStuckDetection();
+            ballSearchTimer = 0f;
+            repathTimer = 0f;
 
             switch (currentState)
             {
