@@ -1,5 +1,8 @@
 // v0.1
-// Initial prototype version
+    // Initial prototype version
+// v0.2
+    // Changes:
+    // - Adding Player Dodge Mechanic via TickDodgeTimers() HandleDodgeInput() and updates to Update() and HandleMovement()
 using BulletTimeDodgeball.Gameplay;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -28,6 +31,13 @@ namespace BulletTimeDodgeball.Player
         [SerializeField] private float maxLookAngle = 85f;
         [SerializeField] [Range(0.25f, 1f)] private float playerMoveScaleDuringBulletTime = 0.55f;
         [SerializeField] [Range(0.25f, 1f)] private float playerLookScaleDuringBulletTime = 0.65f;
+
+        [Header("Dodge")]
+        [SerializeField] private float dodgeSpeed = 14f;
+        [SerializeField] private float dodgeDuration = 0.15f;
+        [SerializeField] private float dodgeCooldown = 0.45f;
+        [SerializeField] private float dodgeStaminaCost = 18f;
+        [SerializeField] private float dodgeTapWindow = 0.25f;
 
         [Header("Costs")]
         [SerializeField] private float sprintStaminaDrainPerSecond = 12f;
@@ -58,11 +68,19 @@ namespace BulletTimeDodgeball.Player
         private bool isChargingThrow;
         private bool loggedMissingCamera;
 
+        private bool isDodging;
+        private float dodgeTimer;
+        private float dodgeCooldownTimer;
+        private Vector3 dodgeDirection;
+        private float lastLeftTapTime = -999f;
+        private float lastRightTapTime = -999f;
+
         public bool IsChargingThrow => isChargingThrow;
         public float ThrowChargeNormalized => throwCharge01;
         public bool IsHoldingBall => heldBall != null;
         public bool IsGodMode => actor != null && actor.GodMode;
-
+        public bool IsDodging => isDodging;
+                
         private void Awake()
         {
             characterController = GetComponent<CharacterController>();
@@ -106,6 +124,9 @@ namespace BulletTimeDodgeball.Player
                 return;
             }
 
+            TickDodgeTimers();
+            HandleDodgeInput();
+            
             HandleMovement();
             HandleLook();
             HandleBallInteraction();
@@ -159,7 +180,29 @@ namespace BulletTimeDodgeball.Player
 
             Vector3 moveInput = (transform.right * inputX + transform.forward * inputZ).normalized;
             bool hasMoveInput = moveInput.sqrMagnitude > 0.001f;
-
+            
+            if (isDodging)
+            {
+                if (characterController.isGrounded && verticalVelocity < 0f)
+                {
+                    verticalVelocity = -2f;
+                }
+            
+                float finalDodgeSpeed = dodgeSpeed;
+                if (bulletTime != null && bulletTime.IsActive)
+                {
+                    finalDodgeSpeed *= playerMoveScaleDuringBulletTime / Mathf.Max(bulletTime.BulletTimeScale, 0.001f);
+                }
+            
+                verticalVelocity += gravity * Time.deltaTime;
+                Vector3 dodgeVelocity = dodgeDirection * finalDodgeSpeed;
+                Vector3 frameVelocity = dodgeVelocity + Vector3.up * verticalVelocity;
+                characterController.Move(frameVelocity * Time.deltaTime);
+            
+                planarVelocity = Vector3.zero;
+                return;
+            }
+            
             if (actor.GodMode)
             {
                 HandleGodModeMovement(moveInput, hasMoveInput);
@@ -212,6 +255,90 @@ namespace BulletTimeDodgeball.Player
             characterController.Move(frameVelocity * Time.deltaTime);
         }
 
+        private void TickDodgeTimers()
+        {
+            if (dodgeCooldownTimer > 0f)
+            {
+                dodgeCooldownTimer -= Time.deltaTime;
+            }
+        
+            if (isDodging)
+            {
+                dodgeTimer -= Time.deltaTime;
+                if (dodgeTimer <= 0f)
+                {
+                    isDodging = false;
+                }
+            }
+        }
+        
+        private void HandleDodgeInput()
+        {
+            if (actor == null || actor.IsEliminated || actor.GodMode)
+            {
+                return;
+            }
+        
+            if (Keyboard.current == null)
+            {
+                return;
+            }
+        
+            float now = Time.unscaledTime;
+        
+            if (Keyboard.current.aKey.wasPressedThisFrame)
+            {
+                if (now - lastLeftTapTime <= dodgeTapWindow)
+                {
+                    TryStartDodge(-transform.right);
+                }
+        
+                lastLeftTapTime = now;
+            }
+        
+            if (Keyboard.current.dKey.wasPressedThisFrame)
+            {
+                if (now - lastRightTapTime <= dodgeTapWindow)
+                {
+                    TryStartDodge(transform.right);
+                }
+        
+                lastRightTapTime = now;
+            }
+        }
+
+        private void TryStartDodge(Vector3 worldDirection)
+        {
+            if (isDodging)
+            {
+                return;
+            }
+        
+            if (dodgeCooldownTimer > 0f)
+            {
+                return;
+            }
+        
+            if (!characterController.isGrounded)
+            {
+                return;
+            }
+        
+            if (resources != null && !resources.SpendStamina(dodgeStaminaCost))
+            {
+                return;
+            }
+        
+            isDodging = true;
+            dodgeTimer = dodgeDuration;
+            dodgeCooldownTimer = dodgeCooldown;
+            dodgeDirection = worldDirection.normalized;
+        
+            // Cancel charged throw if dodging mid-charge
+            isChargingThrow = false;
+            throwCharge01 = 0f;
+        }
+        
         private void HandleGodModeMovement(Vector3 moveInput, bool hasMoveInput)
         {
             float verticalInput = 0f;
