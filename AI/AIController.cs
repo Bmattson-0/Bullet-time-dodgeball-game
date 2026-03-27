@@ -10,6 +10,9 @@
     // - Removed ApplyFacing() method from Update()
     // - Adjusted player reference in Start()
     // - Fixed agent Awake() state
+// v0.3
+    // Changes:
+    // - Adding debug text for AI state to see what action AI is performing, this is in response to a significant delay in AI throwing ball at player with clear sight line.
 
 using UnityEngine;
 using UnityEngine.AI;
@@ -92,6 +95,10 @@ namespace BulletTimeDodgeball.Gameplay
         private float repositionSideSign = 1f;
 
         public bool IsHoldingBall => heldBall != null;
+        public string DebugStateName => currentState.ToString();
+        public bool DebugIsDodging => isDodging;
+        public bool DebugHasMoveTarget => hasMoveTarget;
+        public bool DebugHoldingBall => heldBall != null;
 
         private void Awake()
         {
