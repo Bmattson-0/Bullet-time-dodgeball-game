@@ -1,5 +1,12 @@
 // v0.1
 // Initial prototype version
+// v0.3
+// Changes:
+// - Moved HUD from top-left debug panel to below the crosshair
+// - Added color-coded bars for stamina, focus, and charge
+// - Added cleaner transparent styling
+// - Kept bullet time / holding ball state text for debugging
+
 using BulletTimeDodgeball.Gameplay;
 using BulletTimeDodgeball.Player;
 using UnityEngine;
@@ -15,10 +22,22 @@ namespace BulletTimeDodgeball.UI
         [Header("Display")]
         [SerializeField] private bool showHud = true;
         [SerializeField] private bool showCrosshair = true;
+        [SerializeField] private bool showStatusText = true;
+
+        [Header("Layout")]
+        [SerializeField] private float barWidth = 120f;
+        [SerializeField] private float barHeight = 10f;
+        [SerializeField] private float barSpacing = 8f;
+        [SerializeField] private float hudOffsetBelowCrosshair = 28f;
 
         private GUIStyle labelStyle;
-        private Texture2D barTexture;
+        private GUIStyle statusStyle;
+
+        private Texture2D staminaTexture;
+        private Texture2D focusTexture;
+        private Texture2D chargeTexture;
         private Texture2D bgTexture;
+        private Texture2D crosshairTexture;
 
         private void Awake()
         {
@@ -37,84 +56,98 @@ namespace BulletTimeDodgeball.UI
                 bulletTimeController = FindFirstObjectByType<BulletTimeController>();
             }
 
-            barTexture = MakeTexture(new Color(0.25f, 0.8f, 1f, 0.95f));
-            bgTexture = MakeTexture(new Color(0f, 0f, 0f, 0.55f));
+            staminaTexture = MakeTexture(new Color(0.2f, 0.5f, 1f, 0.9f));   // blue
+            focusTexture = MakeTexture(new Color(0.2f, 0.85f, 0.35f, 0.9f)); // green
+            chargeTexture = MakeTexture(new Color(1f, 0.55f, 0.15f, 0.9f));  // orange
+            bgTexture = MakeTexture(new Color(0f, 0f, 0f, 0.4f));
+            crosshairTexture = MakeTexture(Color.white);
         }
 
         private void OnGUI()
         {
-            if (labelStyle == null)
-            {
-                labelStyle = new GUIStyle(GUI.skin.label)
-                {
-                    fontSize = 14,
-                    normal = { textColor = Color.white }
-                };
-            }
-            
-            if (showHud)
-            {
-                DrawResourceHud();
-            }
+            EnsureStyles();
 
             if (showCrosshair)
             {
                 DrawCrosshair();
             }
+
+            if (showHud)
+            {
+                DrawCrosshairHud();
+            }
         }
 
-        private void DrawResourceHud()
+        private void EnsureStyles()
         {
-            const float panelX = 16f;
-            const float panelY = 16f;
-            const float panelWidth = 320f;
-            const float panelHeight = 160f;
-            const float barWidth = 200f;
-            const float barHeight = 14f;
+            if (labelStyle == null)
+            {
+                labelStyle = new GUIStyle(GUI.skin.label)
+                {
+                    alignment = TextAnchor.MiddleCenter,
+                    fontSize = 11,
+                    normal = { textColor = Color.white }
+                };
+            }
 
-            GUI.DrawTexture(new Rect(panelX, panelY, panelWidth, panelHeight), bgTexture);
+            if (statusStyle == null)
+            {
+                statusStyle = new GUIStyle(GUI.skin.label)
+                {
+                    alignment = TextAnchor.MiddleCenter,
+                    fontSize = 10,
+                    normal = { textColor = new Color(1f, 1f, 1f, 0.9f) }
+                };
+            }
+        }
 
+        private void DrawCrosshairHud()
+        {
             float stamina01 = resources != null ? resources.StaminaNormalized : 0f;
             float focus01 = resources != null ? resources.FocusNormalized : 0f;
             float charge01 = playerController != null ? playerController.ThrowChargeNormalized : 0f;
 
-            float staminaValue = resources != null ? resources.CurrentStamina : 0f;
-            float staminaMax = resources != null ? resources.MaxStamina : 0f;
-            float focusValue = resources != null ? resources.CurrentFocus : 0f;
-            float focusMax = resources != null ? resources.MaxFocus : 0f;
+            float centerX = Screen.width * 0.5f;
+            float centerY = Screen.height * 0.5f;
 
-            GUI.Label(new Rect(panelX + 10f, panelY + 10f, 280f, 24f), "Debug HUD", labelStyle);
+            float startY = centerY + hudOffsetBelowCrosshair;
+            float leftX = centerX - barWidth * 0.5f;
 
-            DrawBar(panelX + 10f, panelY + 38f, barWidth, barHeight, stamina01);
-            GUI.Label(new Rect(panelX + 220f, panelY + 34f, 90f, 24f), $"Stamina {staminaValue:0}/{staminaMax:0}", labelStyle);
+            DrawLabeledBar(leftX, startY, barWidth, barHeight, stamina01, staminaTexture, "STAMINA");
+            DrawLabeledBar(leftX, startY + (barHeight + barSpacing), barWidth, barHeight, focus01, focusTexture, "FOCUS");
+            DrawLabeledBar(leftX, startY + (barHeight + barSpacing) * 2f, barWidth, barHeight, charge01, chargeTexture, "CHARGE");
 
-            DrawBar(panelX + 10f, panelY + 68f, barWidth, barHeight, focus01);
-            GUI.Label(new Rect(panelX + 220f, panelY + 64f, 90f, 24f), $"Focus {focusValue:0}/{focusMax:0}", labelStyle);
+            if (showStatusText)
+            {
+                bool btActive = bulletTimeController != null && bulletTimeController.IsActive;
+                bool hasBall = playerController != null && playerController.IsHoldingBall;
+                bool isDodging = playerController != null && playerController.IsDodging;
 
-            DrawBar(panelX + 10f, panelY + 98f, barWidth, barHeight, charge01);
-            GUI.Label(new Rect(panelX + 220f, panelY + 94f, 90f, 24f), $"Charge {(charge01 * 100f):0}%", labelStyle);
-
-            bool btActive = bulletTimeController != null && bulletTimeController.IsActive;
-            bool hasBall = playerController != null && playerController.IsHoldingBall;
-            GUI.Label(new Rect(panelX + 10f, panelY + 124f, 300f, 24f), $"BulletTime: {(btActive ? "ON" : "OFF")} | HoldingBall: {(hasBall ? "YES" : "NO")}", labelStyle);
+                string status = $"BT {(btActive ? "ON" : "OFF")}  |  BALL {(hasBall ? "YES" : "NO")}  |  DODGE {(isDodging ? "YES" : "NO")}";
+                GUI.Label(
+                    new Rect(centerX - 120f, startY + (barHeight + barSpacing) * 3f + 4f, 240f, 18f),
+                    status,
+                    statusStyle);
+            }
         }
 
-        private void DrawBar(float x, float y, float width, float height, float value01)
+        private void DrawLabeledBar(float x, float y, float width, float height, float value01, Texture2D fillTexture, string label)
         {
             GUI.DrawTexture(new Rect(x, y, width, height), bgTexture);
-            GUI.DrawTexture(new Rect(x + 1f, y + 1f, (width - 2f) * Mathf.Clamp01(value01), height - 2f), barTexture);
+            GUI.DrawTexture(new Rect(x + 1f, y + 1f, (width - 2f) * Mathf.Clamp01(value01), height - 2f), fillTexture);
+            GUI.Label(new Rect(x, y - 14f, width, 14f), label, labelStyle);
         }
 
-        private static void DrawCrosshair()
+        private void DrawCrosshair()
         {
             float centerX = Screen.width * 0.5f;
             float centerY = Screen.height * 0.5f;
             const float size = 10f;
             const float thickness = 2f;
 
-            GUI.color = Color.white;
-            GUI.DrawTexture(new Rect(centerX - thickness * 0.5f, centerY - size, thickness, size * 2f), Texture2D.whiteTexture);
-            GUI.DrawTexture(new Rect(centerX - size, centerY - thickness * 0.5f, size * 2f, thickness), Texture2D.whiteTexture);
+            GUI.color = new Color(1f, 1f, 1f, 0.95f);
+            GUI.DrawTexture(new Rect(centerX - thickness * 0.5f, centerY - size, thickness, size * 2f), crosshairTexture);
+            GUI.DrawTexture(new Rect(centerX - size, centerY - thickness * 0.5f, size * 2f, thickness), crosshairTexture);
             GUI.color = Color.white;
         }
 
