@@ -15,7 +15,20 @@ namespace BulletTimeDodgeball.Gameplay
         [SerializeField] private float roundResetDelay = 1.5f;
         [SerializeField] private Key hardResetKey = Key.F5;
 
+        [Header("Round Timer")]
+        [SerializeField] private float roundDurationSeconds = 90f;
+
+        private static int playerScore;
+        private static int enemyScore;
+        private float roundStartUnscaledTime;
         private bool isResettingRound;
+
+        public static int PlayerScore => playerScore;
+        public static int EnemyScore => enemyScore;
+        public float RoundDurationSeconds => roundDurationSeconds;
+        public float RoundElapsedSeconds => Mathf.Max(0f, Time.unscaledTime - roundStartUnscaledTime);
+        public float RoundTimeRemainingSeconds => Mathf.Max(0f, roundDurationSeconds - RoundElapsedSeconds);
+        public bool HasRoundTimer => roundDurationSeconds > 0f;
 
         private void Awake()
         {
@@ -26,6 +39,7 @@ namespace BulletTimeDodgeball.Gameplay
             }
 
             Instance = this;
+            roundStartUnscaledTime = Time.unscaledTime;
         }
 
         private void Update()
@@ -34,6 +48,12 @@ namespace BulletTimeDodgeball.Gameplay
             {
                 ForceResetRound();
             }
+
+            if (!isResettingRound && HasRoundTimer && RoundTimeRemainingSeconds <= 0f)
+            {
+                isResettingRound = true;
+                StartCoroutine(ResetRoundAfterDelay());
+            }
         }
 
         public void HandleElimination(RoundActor eliminatedActor, RoundActor eliminatedBy)
@@ -41,6 +61,18 @@ namespace BulletTimeDodgeball.Gameplay
             if (isResettingRound)
             {
                 return;
+            }
+
+            if (eliminatedActor != null)
+            {
+                if (eliminatedActor.IsPlayer)
+                {
+                    enemyScore++;
+                }
+                else
+                {
+                    playerScore++;
+                }
             }
 
             isResettingRound = true;

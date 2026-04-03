@@ -89,6 +89,7 @@ namespace BulletTimeDodgeball.Player
         public bool IsHoldingBall => heldBall != null;
         public bool IsGodMode => actor != null && actor.GodMode;
         public bool IsDodging => isDodging;
+        public float CurrentSpeed => characterController != null ? new Vector3(characterController.velocity.x, 0f, characterController.velocity.z).magnitude : 0f;
                 
         private void Awake()
         {

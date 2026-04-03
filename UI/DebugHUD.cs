@@ -6,6 +6,10 @@
 // - Added color-coded bars for stamina, focus, and charge
 // - Added cleaner transparent styling
 // - Kept bullet time / holding ball state text for debugging
+// v0.4
+// Changes:
+// - Lightweight gameplay HUD with resources, player speed, and centered crosshair
+// - Added top scoreboard (player vs enemy) and round timer
 
 using BulletTimeDodgeball.Gameplay;
 using BulletTimeDodgeball.Player;
@@ -18,11 +22,12 @@ namespace BulletTimeDodgeball.UI
         [SerializeField] private PlayerResources resources;
         [SerializeField] private PlayerController playerController;
         [SerializeField] private BulletTimeController bulletTimeController;
+        [SerializeField] private GameManager gameManager;
 
         [Header("Display")]
         [SerializeField] private bool showHud = true;
         [SerializeField] private bool showCrosshair = true;
-        [SerializeField] private bool showStatusText = true;
+        [SerializeField] private bool showScoreboard = true;
 
         [Header("Layout")]
         [SerializeField] private float barWidth = 120f;
@@ -31,7 +36,8 @@ namespace BulletTimeDodgeball.UI
         [SerializeField] private float hudOffsetBelowCrosshair = 28f;
 
         private GUIStyle labelStyle;
-        private GUIStyle statusStyle;
+        private GUIStyle centerInfoStyle;
+        private GUIStyle topInfoStyle;
 
         private Texture2D staminaTexture;
         private Texture2D focusTexture;
@@ -56,25 +62,37 @@ namespace BulletTimeDodgeball.UI
                 bulletTimeController = FindFirstObjectByType<BulletTimeController>();
             }
 
-            staminaTexture = MakeTexture(new Color(0.2f, 0.5f, 1f, 0.9f));   // blue
-            focusTexture = MakeTexture(new Color(0.2f, 0.85f, 0.35f, 0.9f)); // green
-            chargeTexture = MakeTexture(new Color(1f, 0.55f, 0.15f, 0.9f));  // orange
+            if (gameManager == null)
+            {
+                gameManager = FindFirstObjectByType<GameManager>();
+            }
+
+            staminaTexture = MakeTexture(new Color(0.2f, 0.5f, 1f, 0.9f));
+            focusTexture = MakeTexture(new Color(0.2f, 0.85f, 0.35f, 0.9f));
+            chargeTexture = MakeTexture(new Color(1f, 0.55f, 0.15f, 0.9f));
             bgTexture = MakeTexture(new Color(0f, 0f, 0f, 0.4f));
             crosshairTexture = MakeTexture(Color.white);
         }
 
         private void OnGUI()
         {
+            if (!showHud)
+            {
+                return;
+            }
+
             EnsureStyles();
+
+            if (showScoreboard)
+            {
+                DrawTopScoreboard();
+            }
+
+            DrawCenterHud();
 
             if (showCrosshair)
             {
                 DrawCrosshair();
-            }
-
-            if (showHud)
-            {
-                DrawCrosshairHud();
             }
         }
 
@@ -90,18 +108,48 @@ namespace BulletTimeDodgeball.UI
                 };
             }
 
-            if (statusStyle == null)
+            if (centerInfoStyle == null)
             {
-                statusStyle = new GUIStyle(GUI.skin.label)
+                centerInfoStyle = new GUIStyle(GUI.skin.label)
                 {
                     alignment = TextAnchor.MiddleCenter,
-                    fontSize = 10,
-                    normal = { textColor = new Color(1f, 1f, 1f, 0.9f) }
+                    fontSize = 12,
+                    fontStyle = FontStyle.Bold,
+                    normal = { textColor = new Color(1f, 1f, 1f, 0.95f) }
+                };
+            }
+
+            if (topInfoStyle == null)
+            {
+                topInfoStyle = new GUIStyle(GUI.skin.label)
+                {
+                    alignment = TextAnchor.UpperCenter,
+                    fontSize = 14,
+                    fontStyle = FontStyle.Bold,
+                    normal = { textColor = new Color(1f, 1f, 1f, 0.98f) }
                 };
             }
         }
 
-        private void DrawCrosshairHud()
+        private void DrawTopScoreboard()
+        {
+            float timer = gameManager != null ? gameManager.RoundTimeRemainingSeconds : 0f;
+            int minutes = Mathf.FloorToInt(timer / 60f);
+            int seconds = Mathf.FloorToInt(timer % 60f);
+            string timerText = gameManager != null && gameManager.HasRoundTimer
+                ? $"{minutes:00}:{seconds:00}"
+                : "--:--";
+
+            string scoreText = $"PLAYER {GameManager.PlayerScore}  -  {GameManager.EnemyScore} ENEMY";
+
+            GUI.DrawTexture(new Rect(Screen.width * 0.5f - 170f, 8f, 340f, 24f), bgTexture);
+            GUI.Label(new Rect(Screen.width * 0.5f - 170f, 8f, 340f, 24f), scoreText, topInfoStyle);
+
+            GUI.DrawTexture(new Rect(Screen.width * 0.5f - 55f, 34f, 110f, 22f), bgTexture);
+            GUI.Label(new Rect(Screen.width * 0.5f - 55f, 34f, 110f, 22f), timerText, topInfoStyle);
+        }
+
+        private void DrawCenterHud()
         {
             float stamina01 = resources != null ? resources.StaminaNormalized : 0f;
             float focus01 = resources != null ? resources.FocusNormalized : 0f;
@@ -117,18 +165,10 @@ namespace BulletTimeDodgeball.UI
             DrawLabeledBar(leftX, startY + (barHeight + barSpacing), barWidth, barHeight, focus01, focusTexture, "FOCUS");
             DrawLabeledBar(leftX, startY + (barHeight + barSpacing) * 2f, barWidth, barHeight, charge01, chargeTexture, "CHARGE");
 
-            if (showStatusText)
-            {
-                bool btActive = bulletTimeController != null && bulletTimeController.IsActive;
-                bool hasBall = playerController != null && playerController.IsHoldingBall;
-                bool isDodging = playerController != null && playerController.IsDodging;
-
-                string status = $"BT {(btActive ? "ON" : "OFF")}  |  BALL {(hasBall ? "YES" : "NO")}  |  DODGE {(isDodging ? "YES" : "NO")}";
-                GUI.Label(
-                    new Rect(centerX - 120f, startY + (barHeight + barSpacing) * 3f + 4f, 240f, 18f),
-                    status,
-                    statusStyle);
-            }
+            float speed = playerController != null ? playerController.CurrentSpeed : 0f;
+            bool btActive = bulletTimeController != null && bulletTimeController.IsActive;
+            string centerInfo = $"SPD {speed:0.0}  |  BT {(btActive ? "ON" : "OFF")}";
+            GUI.Label(new Rect(centerX - 120f, startY + (barHeight + barSpacing) * 3f + 4f, 240f, 18f), centerInfo, centerInfoStyle);
         }
 
         private void DrawLabeledBar(float x, float y, float width, float height, float value01, Texture2D fillTexture, string label)
