@@ -46,6 +46,13 @@ namespace BulletTimeDodgeball.Gameplay
         public float CountdownTimeRemainingSeconds => roundStartCountdownSeconds - (Time.unscaledTime - countdownStartUnscaledTime);
         public int CountdownDisplayValue => Mathf.Clamp(Mathf.CeilToInt(CountdownTimeRemainingSeconds), 0, Mathf.CeilToInt(roundStartCountdownSeconds));
 
+        public static int PlayerScore => playerScore;
+        public static int EnemyScore => enemyScore;
+        public float RoundDurationSeconds => roundDurationSeconds;
+        public float RoundElapsedSeconds => Mathf.Max(0f, Time.unscaledTime - roundStartUnscaledTime);
+        public float RoundTimeRemainingSeconds => Mathf.Max(0f, roundDurationSeconds - RoundElapsedSeconds);
+        public bool HasRoundTimer => roundDurationSeconds > 0f;
+
         private void Awake()
         {
             if (Instance != null && Instance != this)

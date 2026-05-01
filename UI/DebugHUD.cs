@@ -143,6 +143,35 @@ namespace BulletTimeDodgeball.UI
                     normal = { textColor = new Color(1f, 1f, 1f, 0.98f) }
                 };
             }
+
+            if (topInfoStyle == null)
+            {
+                topInfoStyle = new GUIStyle(GUI.skin.label)
+                {
+                    alignment = TextAnchor.UpperCenter,
+                    fontSize = 14,
+                    fontStyle = FontStyle.Bold,
+                    normal = { textColor = new Color(1f, 1f, 1f, 0.98f) }
+                };
+            }
+        }
+
+        private void DrawTopScoreboard()
+        {
+            float timer = gameManager != null ? gameManager.RoundTimeRemainingSeconds : 0f;
+            int minutes = Mathf.FloorToInt(timer / 60f);
+            int seconds = Mathf.FloorToInt(timer % 60f);
+            string timerText = gameManager != null && gameManager.HasRoundTimer
+                ? $"{minutes:00}:{seconds:00}"
+                : "--:--";
+
+            string scoreText = $"PLAYER {GameManager.PlayerScore}  -  {GameManager.EnemyScore} ENEMY";
+
+            GUI.DrawTexture(new Rect(Screen.width * 0.5f - 170f, 8f, 340f, 24f), bgTexture);
+            GUI.Label(new Rect(Screen.width * 0.5f - 170f, 8f, 340f, 24f), scoreText, topInfoStyle);
+
+            GUI.DrawTexture(new Rect(Screen.width * 0.5f - 55f, 34f, 110f, 22f), bgTexture);
+            GUI.Label(new Rect(Screen.width * 0.5f - 55f, 34f, 110f, 22f), timerText, topInfoStyle);
         }
 
         private void DrawTopScoreboard()
