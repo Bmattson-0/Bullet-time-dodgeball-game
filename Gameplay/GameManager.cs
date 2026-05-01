@@ -62,6 +62,11 @@ namespace BulletTimeDodgeball.Gameplay
 
         private void Update()
         {
+            if (UI.MainMenuController.IsAnyMenuOpen)
+            {
+                return;
+            }
+
             if (Keyboard.current != null && Keyboard.current[hardResetKey].wasPressedThisFrame)
             {
                 ForceResetRound();

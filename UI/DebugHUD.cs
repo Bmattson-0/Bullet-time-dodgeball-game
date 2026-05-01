@@ -77,7 +77,7 @@ namespace BulletTimeDodgeball.UI
 
         private void OnGUI()
         {
-            if (!showHud)
+            if (!showHud || MainMenuController.IsAnyMenuOpen)
             {
                 return;
             }

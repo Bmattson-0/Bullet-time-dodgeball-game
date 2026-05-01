@@ -90,6 +90,11 @@ namespace BulletTimeDodgeball.Player
         public bool IsGodMode => actor != null && actor.GodMode;
         public bool IsDodging => isDodging;
         public float CurrentSpeed => characterController != null ? new Vector3(characterController.velocity.x, 0f, characterController.velocity.z).magnitude : 0f;
+
+        public void SetLookSensitivity(float sensitivity)
+        {
+            lookSensitivity = Mathf.Max(0.01f, sensitivity);
+        }
                 
         private void Awake()
         {
@@ -140,6 +145,11 @@ namespace BulletTimeDodgeball.Player
                 verticalVelocity = 0f;
                 isChargingThrow = false;
                 throwCharge01 = 0f;
+                return;
+            }
+
+            if (UI.MainMenuController.IsAnyMenuOpen)
+            {
                 return;
             }
 
