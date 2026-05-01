@@ -155,6 +155,16 @@ namespace BulletTimeDodgeball.Gameplay
                 return;
             }
 
+            if (GameManager.Instance != null && GameManager.Instance.IsRoundInputLocked)
+            {
+                if (agent.enabled)
+                {
+                    agent.isStopped = true;
+                    agent.ResetPath();
+                }
+                return;
+            }
+
             if (throwCooldownTimer > 0f)
             {
                 throwCooldownTimer -= Time.deltaTime;

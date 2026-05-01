@@ -134,6 +134,15 @@ namespace BulletTimeDodgeball.Player
                 return;
             }
 
+            if (GameManager.Instance != null && GameManager.Instance.IsRoundInputLocked)
+            {
+                planarVelocity = Vector3.zero;
+                verticalVelocity = 0f;
+                isChargingThrow = false;
+                throwCharge01 = 0f;
+                return;
+            }
+
             TickDodgeTimers();
             HandleDodgeInput();
             

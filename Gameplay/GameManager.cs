@@ -9,6 +9,13 @@ namespace BulletTimeDodgeball.Gameplay
 {
     public class GameManager : MonoBehaviour
     {
+        public enum RoundFlowState
+        {
+            Countdown,
+            InRound,
+            RoundEnd
+        }
+
         public static GameManager Instance { get; private set; }
 
         [Header("Round Reset")]
@@ -17,11 +24,27 @@ namespace BulletTimeDodgeball.Gameplay
 
         [Header("Round Timer")]
         [SerializeField] private float roundDurationSeconds = 90f;
+        [SerializeField] private float roundStartCountdownSeconds = 3f;
+        [SerializeField] private float goDisplaySeconds = 0.5f;
+        [SerializeField] private float roundEndCooldownSeconds = 2.5f;
 
         private static int playerScore;
         private static int enemyScore;
         private float roundStartUnscaledTime;
+        private float countdownStartUnscaledTime;
         private bool isResettingRound;
+        private RoundFlowState roundFlowState;
+
+        public static int PlayerScore => playerScore;
+        public static int EnemyScore => enemyScore;
+        public RoundFlowState CurrentRoundFlowState => roundFlowState;
+        public bool IsRoundInputLocked => roundFlowState != RoundFlowState.InRound;
+        public float RoundDurationSeconds => roundDurationSeconds;
+        public float RoundElapsedSeconds => Mathf.Max(0f, Time.unscaledTime - roundStartUnscaledTime);
+        public float RoundTimeRemainingSeconds => Mathf.Max(0f, roundDurationSeconds - RoundElapsedSeconds);
+        public bool HasRoundTimer => roundDurationSeconds > 0f;
+        public float CountdownTimeRemainingSeconds => roundStartCountdownSeconds - (Time.unscaledTime - countdownStartUnscaledTime);
+        public int CountdownDisplayValue => Mathf.Clamp(Mathf.CeilToInt(CountdownTimeRemainingSeconds), 0, Mathf.CeilToInt(roundStartCountdownSeconds));
 
         public static int PlayerScore => playerScore;
         public static int EnemyScore => enemyScore;
@@ -40,6 +63,8 @@ namespace BulletTimeDodgeball.Gameplay
 
             Instance = this;
             roundStartUnscaledTime = Time.unscaledTime;
+            countdownStartUnscaledTime = Time.unscaledTime;
+            roundFlowState = roundStartCountdownSeconds > 0f ? RoundFlowState.Countdown : RoundFlowState.InRound;
         }
 
         private void Update()
@@ -47,6 +72,17 @@ namespace BulletTimeDodgeball.Gameplay
             if (Keyboard.current != null && Keyboard.current[hardResetKey].wasPressedThisFrame)
             {
                 ForceResetRound();
+            }
+
+            if (roundFlowState == RoundFlowState.Countdown && CountdownTimeRemainingSeconds <= -goDisplaySeconds)
+            {
+                roundFlowState = RoundFlowState.InRound;
+                roundStartUnscaledTime = Time.unscaledTime;
+            }
+
+            if (roundFlowState != RoundFlowState.InRound)
+            {
+                return;
             }
 
             if (!isResettingRound && HasRoundTimer && RoundTimeRemainingSeconds <= 0f)
@@ -75,6 +111,7 @@ namespace BulletTimeDodgeball.Gameplay
                 }
             }
 
+            roundFlowState = RoundFlowState.RoundEnd;
             isResettingRound = true;
             StartCoroutine(ResetRoundAfterDelay());
         }
@@ -92,7 +129,8 @@ namespace BulletTimeDodgeball.Gameplay
 
         private IEnumerator ResetRoundAfterDelay()
         {
-            yield return new WaitForSeconds(roundResetDelay);
+            float waitSeconds = Mathf.Max(roundEndCooldownSeconds, roundResetDelay);
+            yield return new WaitForSeconds(waitSeconds);
             RestoreTimeDefaults();
             SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
         }
