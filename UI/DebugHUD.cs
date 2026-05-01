@@ -86,7 +86,7 @@ namespace BulletTimeDodgeball.UI
 
             if (showScoreboard)
             {
-                DrawTopScoreboard();
+                DrawScoreboardPanel();
             }
 
             DrawCenterHud();
@@ -143,47 +143,18 @@ namespace BulletTimeDodgeball.UI
                     normal = { textColor = new Color(1f, 1f, 1f, 0.98f) }
                 };
             }
-
-            if (topInfoStyle == null)
-            {
-                topInfoStyle = new GUIStyle(GUI.skin.label)
-                {
-                    alignment = TextAnchor.UpperCenter,
-                    fontSize = 14,
-                    fontStyle = FontStyle.Bold,
-                    normal = { textColor = new Color(1f, 1f, 1f, 0.98f) }
-                };
-            }
         }
 
-        private void DrawTopScoreboard()
+        private void DrawScoreboardPanel()
         {
-            float timer = gameManager != null ? gameManager.RoundTimeRemainingSeconds : 0f;
+            float timer = gameManager != null ? gameManager.CurrentRoundTimeRemainingSeconds : 0f;
             int minutes = Mathf.FloorToInt(timer / 60f);
             int seconds = Mathf.FloorToInt(timer % 60f);
-            string timerText = gameManager != null && gameManager.HasRoundTimer
+            string timerText = gameManager != null && gameManager.IsRoundTimerEnabled
                 ? $"{minutes:00}:{seconds:00}"
                 : "--:--";
 
-            string scoreText = $"PLAYER {GameManager.PlayerScore}  -  {GameManager.EnemyScore} ENEMY";
-
-            GUI.DrawTexture(new Rect(Screen.width * 0.5f - 170f, 8f, 340f, 24f), bgTexture);
-            GUI.Label(new Rect(Screen.width * 0.5f - 170f, 8f, 340f, 24f), scoreText, topInfoStyle);
-
-            GUI.DrawTexture(new Rect(Screen.width * 0.5f - 55f, 34f, 110f, 22f), bgTexture);
-            GUI.Label(new Rect(Screen.width * 0.5f - 55f, 34f, 110f, 22f), timerText, topInfoStyle);
-        }
-
-        private void DrawTopScoreboard()
-        {
-            float timer = gameManager != null ? gameManager.RoundTimeRemainingSeconds : 0f;
-            int minutes = Mathf.FloorToInt(timer / 60f);
-            int seconds = Mathf.FloorToInt(timer % 60f);
-            string timerText = gameManager != null && gameManager.HasRoundTimer
-                ? $"{minutes:00}:{seconds:00}"
-                : "--:--";
-
-            string scoreText = $"PLAYER {GameManager.PlayerScore}  -  {GameManager.EnemyScore} ENEMY";
+            string scoreText = $"PLAYER {GameManager.MatchPlayerScore}  -  {GameManager.MatchEnemyScore} ENEMY";
 
             GUI.DrawTexture(new Rect(Screen.width * 0.5f - 170f, 8f, 340f, 24f), bgTexture);
             GUI.Label(new Rect(Screen.width * 0.5f - 170f, 8f, 340f, 24f), scoreText, topInfoStyle);
@@ -257,7 +228,7 @@ namespace BulletTimeDodgeball.UI
             {
                 GUI.DrawTexture(new Rect(centerX - 180f, centerY - 44f, 360f, 90f), bgTexture);
                 GUI.Label(new Rect(centerX - 180f, centerY - 44f, 360f, 44f), "ROUND END", centerAnnouncementStyle);
-                GUI.Label(new Rect(centerX - 180f, centerY + 2f, 360f, 28f), $"PLAYER {GameManager.PlayerScore} - {GameManager.EnemyScore} ENEMY", topInfoStyle);
+                GUI.Label(new Rect(centerX - 180f, centerY + 2f, 360f, 28f), $"PLAYER {GameManager.MatchPlayerScore} - {GameManager.MatchEnemyScore} ENEMY", topInfoStyle);
             }
         }
 

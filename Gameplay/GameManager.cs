@@ -35,23 +35,16 @@ namespace BulletTimeDodgeball.Gameplay
         private bool isResettingRound;
         private RoundFlowState roundFlowState;
 
-        public static int PlayerScore => playerScore;
-        public static int EnemyScore => enemyScore;
+        public static int MatchPlayerScore => playerScore;
+        public static int MatchEnemyScore => enemyScore;
         public RoundFlowState CurrentRoundFlowState => roundFlowState;
         public bool IsRoundInputLocked => roundFlowState != RoundFlowState.InRound;
-        public float RoundDurationSeconds => roundDurationSeconds;
-        public float RoundElapsedSeconds => Mathf.Max(0f, Time.unscaledTime - roundStartUnscaledTime);
-        public float RoundTimeRemainingSeconds => Mathf.Max(0f, roundDurationSeconds - RoundElapsedSeconds);
-        public bool HasRoundTimer => roundDurationSeconds > 0f;
+        public float CurrentRoundDurationSeconds => roundDurationSeconds;
+        public float CurrentRoundElapsedSeconds => Mathf.Max(0f, Time.unscaledTime - roundStartUnscaledTime);
+        public float CurrentRoundTimeRemainingSeconds => Mathf.Max(0f, roundDurationSeconds - CurrentRoundElapsedSeconds);
+        public bool IsRoundTimerEnabled => roundDurationSeconds > 0f;
         public float CountdownTimeRemainingSeconds => roundStartCountdownSeconds - (Time.unscaledTime - countdownStartUnscaledTime);
         public int CountdownDisplayValue => Mathf.Clamp(Mathf.CeilToInt(CountdownTimeRemainingSeconds), 0, Mathf.CeilToInt(roundStartCountdownSeconds));
-
-        public static int PlayerScore => playerScore;
-        public static int EnemyScore => enemyScore;
-        public float RoundDurationSeconds => roundDurationSeconds;
-        public float RoundElapsedSeconds => Mathf.Max(0f, Time.unscaledTime - roundStartUnscaledTime);
-        public float RoundTimeRemainingSeconds => Mathf.Max(0f, roundDurationSeconds - RoundElapsedSeconds);
-        public bool HasRoundTimer => roundDurationSeconds > 0f;
 
         private void Awake()
         {
@@ -85,7 +78,7 @@ namespace BulletTimeDodgeball.Gameplay
                 return;
             }
 
-            if (!isResettingRound && HasRoundTimer && RoundTimeRemainingSeconds <= 0f)
+            if (!isResettingRound && IsRoundTimerEnabled && CurrentRoundTimeRemainingSeconds <= 0f)
             {
                 isResettingRound = true;
                 StartCoroutine(ResetRoundAfterDelay());
